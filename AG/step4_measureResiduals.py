@@ -40,6 +40,7 @@ if args.inputdir!="":
             filenames.append(args.inputdir+"/"+shortfilename)
 if args.file!="":
     filenames.append(args.file)
+print('filenames:',filenames)
 
 hists={}
 if args.label!="":
@@ -259,8 +260,8 @@ for filename in filenames:
         tgraph_t1_abs_lumi.SetPoint(nevent,lumitotal,type1abs_raw[0])
         tgraph_t1_abs_lumi.SetPointError(nevent,0,type1abs_raw_e[0])
         if FILL[0] not in thist_t1_frac_sbil.keys(): thist_t1_frac_sbil[FILL[0]]=[ROOT.TGraphErrors(),0]
-        thist_t1_frac_sbil[FILL[0]][0].SetPoint(thist_t1_frac_sbil[FILL[0]][1],AveSBIL_raw[0],type1frac_raw[0])
-        thist_t1_frac_sbil[FILL[0]][0].SetPointError(thist_t1_frac_sbil[FILL[0]][1],0,type1frac_raw_e[0])
+        thist_t1_frac_sbil[FILL[0]][0].SetPoint(thist_t1_frac_sbil[FILL[0]][1],type1abs_rawSubnoise[0],type1frac_rawSubnoise[0])
+        thist_t1_frac_sbil[FILL[0]][0].SetPointError(thist_t1_frac_sbil[FILL[0]][1],type1abs_rawSubnoise_e[0],type1frac_rawSubnoise_e[0])
         thist_t1_frac_sbil[FILL[0]][1]+=1
         if FILL[0] not in thist_lumi_correction.keys(): thist_lumi_correction[FILL[0]]=[ROOT.TGraphErrors(),0,0,0,0]
         thist_lumi_correction[FILL[0]][0].SetPoint(thist_lumi_correction[FILL[0]][1],AveSBIL_raw[0], AveSBIL_rawSublocalT1[0]/AveSBIL_raw[0])
@@ -288,7 +289,7 @@ text2.SetNDC()
 text2.SetTextSize(0.05)
 text2.SetTextFont(62)
 
-skip_someplots=False
+skip_someplots=True
 if not skip_someplots:
     tgraph_t1_frac_sbil.GetYaxis().SetTitleOffset(1.5)
     tgraph_t1_frac_sbil.SetMarkerStyle(23)
@@ -409,9 +410,9 @@ def find_fit_range(graph):
 
     min_key = 40000
     max_key = -1
-    miny_key = 0.9
-    maxy_key = 1.1
-    if len(y_list)>0:
+    miny_key = -0.1
+    maxy_key = 0.1
+    if len(y_list)>1:
         miny_key = np.min(y_list)
         maxy_key = np.max(y_list)
     #print(counts)
@@ -430,13 +431,14 @@ def remove_outlier(graph):
     np = graph.GetN()
     ip=0
     while ip<np:
-        if abs(graph.GetY()[ip]-mean)>mean*0.20:
+        if abs(graph.GetY()[ip]-mean)>mean*0.20 or graph.GetX()[ip]<=0.001:
             print('remove ', ip, graph.GetX()[ip], graph.GetY()[ip])
             graph.RemovePoint(ip)
             ip-=1
             np-=1
         ip+=1
 
+fill2p0p1={}
 makeperfill=True
 if makeperfill:
     P0_vs_Fill = ROOT.TGraphErrors()
@@ -453,30 +455,33 @@ if makeperfill:
     cantemp=ROOT.TCanvas("cantemp","cantemp",1000,700)
     cantemp.SetTickx()
     cantemp.SetTicky()
-    for ikey in thist_lumi_correction.keys():
-        if thist_lumi_correction[ikey][1]<5 or ikey=='total': 
+    for ikey in thist_t1_frac_sbil.keys():
+        print(ikey)
+        if thist_t1_frac_sbil[ikey][1]<3 or ikey=='total': 
             print('not enough points in ', ikey)
             continue
         cantemp.Update()
-        low_x,high_x,lowy,highy = find_fit_range(thist_lumi_correction[ikey][0])
-        remove_outlier(thist_lumi_correction[ikey][0])
-        #thist_lumi_correction[ikey][0].SetTitle("type1FracVsSBIL,Fill %s;Average SBIL (Hz/#muB);Type 1 residual (Fraction)"%str(ikey))
-        thist_lumi_correction[ikey][0].SetTitle("Fill %s;Average SBIL (Hz/#muB);Correction Factor"%str(ikey))
-        thist_lumi_correction[ikey][0].SetMarkerColor(ROOT.kBlue)
-        thist_lumi_correction[ikey][0].GetYaxis().SetTitleOffset(1.5)
-        thist_lumi_correction[ikey][0].SetMarkerStyle(23)
-        thist_lumi_correction[ikey][0].SetMarkerSize(1.2)
-        thist_lumi_correction[ikey][0].SetMarkerColor(ROOT.kBlue)
-        thist_lumi_correction[ikey][0].GetYaxis().SetRangeUser(lowy,max(highy,1.01))
-        thist_lumi_correction[ikey][0].Draw("APE0Z")
-        FitResult = thist_lumi_correction[ikey][0].Fit("pol1", "Q","",max(0.2,low_x), high_x)
-        FitResult = thist_lumi_correction[ikey][0].GetFunction("pol1")
+        grtmp=thist_t1_frac_sbil[ikey][0]
+        low_x,high_x,lowy,highy = find_fit_range(grtmp)
+        if grtmp.GetN()<2:
+            print('after remove_outlier not enough points in ', ikey)
+            continue
+        grtmp.SetTitle("Fill %s;IL (/#muB);Type1 fraction"%str(ikey))
+        grtmp.SetMarkerColor(ROOT.kBlue)
+        grtmp.GetYaxis().SetTitleOffset(1.5)
+        grtmp.SetMarkerStyle(23)
+        grtmp.SetMarkerSize(1.2)
+        grtmp.SetMarkerColor(ROOT.kBlue)
+        grtmp.GetYaxis().SetRangeUser(lowy,highy)
+        grtmp.Draw("APE0Z")
+        FitResult = grtmp.Fit("pol1", "Q","",max(0.2,low_x), high_x)
+        FitResult = grtmp.GetFunction("pol1")
         try:
             p0 = FitResult.GetParameter(0)
             p0err = FitResult.GetParError(0)
             p1 = FitResult.GetParameter(1)
             p1err = FitResult.GetParError(1)
-            if p0err < 0.004 and p1err < 0.0005:
+            if p0err < 1 and p1err < 1:
                 P0_vs_Fill.SetPoint(ifill, float(ikey), p0)
                 P0_vs_Fill.SetPointError(ifill, 0, p0err)
                 P1_vs_Fill.SetPoint(ifill, float(ikey), p1)
@@ -496,15 +501,19 @@ if makeperfill:
                 P0_vs_lumi.SetPointError(ifill, 0, p0err)
                 P1_vs_lumi.SetPoint(ifill, lumitotal, p1)
                 P1_vs_lumi.SetPointError(ifill, 0, p1err)
+                fill2p0p1[str(int(ikey))]=[p0,p0err,p1,p1err]
                 lumicorrect_lumi.SetPoint(ifill, lumitotal, thist_lumi_correction[ikey][2]/thist_lumi_correction[ikey][3])
                 ifill+=1
             else:
                 print(ikey, " has large uncertianry")
             text.Draw("same")
             text2.Draw("same")
+            f1 = ROOT.TF1("f1","[0]+[1]*x",max(0.2,low_x), high_x)
+            f1.SetParameters(p0,p1)
+            f1.Draw("same")
             fitfuc="Fit: p0+p1*x"
-            fitfuc1="P0=%0.5f#pm%0.5f"%(p0,p0err)
-            fitfuc2="P1=%0.5f#pm%0.5f"%(p1,p1err)
+            fitfuc1="P0=%0.9f #pm%0.5f"%(p0,p0err)
+            fitfuc2="P1=%0.9f #pm%0.5f"%(p1,p1err)
             #if p1<0: fitfuc="Fit: %0.5f%0.5f*x"%(p0,p1)
             text3=ROOT.TLatex(0.4,0.8,fitfuc)
             text3.SetNDC()
@@ -525,6 +534,11 @@ if makeperfill:
             cantemp.SaveAs(args.outputdir+"/OverallLumiCor_Fill_"+str(ikey)+args.label+".C")
         except:
             print("Problem with the Fill:", ikey)
+        #input()
+    fill2p0p1keys=fill2p0p1.keys()
+    fill2p0p1keys.sort()
+    for ikey in fill2p0p1keys:
+        print( "'%s':[%0.8f,%0.8f,%0.8f,%0.8f],"%(ikey,fill2p0p1[ikey][0],fill2p0p1[ikey][1],fill2p0p1[ikey][2],fill2p0p1[ikey][3],) )
     cantemp.Update()
     P0_vs_Fill.GetXaxis().SetTitle("Fill")
     P0_vs_Fill.GetYaxis().SetTitle("p0")
@@ -548,7 +562,7 @@ if makeperfill:
     cantemp.SaveAs(args.outputdir+"/P1_vs_Fill_"+args.label+".png")
     cantemp.SaveAs(args.outputdir+"/P1_vs_Fill_"+args.label+".C")
     cantemp.Update()
-    thist_lumi_correction_prof=thist_lumi_correction['total'].ProfileX()
+    thist_lumi_correction_prof=thist_lumi_correction['total'].ProfileX("_pfx",1,-1,"S")
     thist_lumi_correction_prof.GetYaxis().SetRangeUser(0.95,1.05)
     thist_lumi_correction_prof.Draw()
     cantemp.SaveAs(args.outputdir+"/OverallLumiCor_profile"+args.label+".png")

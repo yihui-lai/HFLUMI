@@ -239,17 +239,12 @@ for run in runs:
         if iLB==maxLSInRun[run]/args.nLSInLumiBlock:
             LBKey=run+"_LS"+str(iLB*args.nLSInLumiBlock+1)+"_LS"+str(maxLSInRun[run])+"_Fill"+runtoFills[run]
         LBKeys.append(LBKey)
-        #allLumiPerBX_raw[LBKey]=ROOT.TH1F("allLumiPerBX_raw"+LBKey, "", BXLength, 0, BXLength)
         allLumiPerBX_oldSBR[LBKey]=ROOT.TH1F("allLumiPerBX_oldSBR"+LBKey, "", BXLength, 0, BXLength)
-        #allLumiPerBX_newSBR[LBKey]=ROOT.TH1F("allLumiPerBX_newSBR"+LBKey, "", BXLength, 0, BXLength)
         allLumiPerBX_oldSBR_cor[LBKey]=ROOT.TH1F("allLumiPerBX_oldSBR_cor"+LBKey, "", BXLength, 0, BXLength)
-        #allLumiPerBX_newSBR_cor[LBKey]=ROOT.TH1F("allLumiPerBX_newSBR_cor"+LBKey, "", BXLength, 0, BXLength)
         hist_info[LBKey] = ROOT.TH1F("hist_info"+LBKey, "", 25, 0, 25)
         lumimask[LBKey]=ROOT.TH1F("lumimask"+LBKey, "", BXLength, 0, BXLength)
-        # Average lumi, raw, old SBR, new SBR; old residual type1 cor, new residual type1 cor
 
 LBKeys.sort()
-#print(LBKeys)
 LBKeys2npindex={}
 # -------------------- first scan of events, know the start and end of Lumi blocks
 for iev in range(nevents):
@@ -269,44 +264,10 @@ for iev in range(nevents):
 
 # -------------------- Fill histograms according to the Lumi blocks
 newfile=ROOT.TFile("Overall_Correction_"+label+".root", "recreate")
-#for LBKey in LBKeys2npindex.keys():
-#    rawdata = data_bx[LBKeys2npindex[LBKey][0]:LBKeys2npindex[LBKey][1]+1]
-#    rawdata_mask = data_mask[LBKeys2npindex[LBKey][0]:LBKeys2npindex[LBKey][1]+1]
-#    totallumi = np.average( np.multiply(rawdata,rawdata_mask) , axis=1)
-#    print(rawdata.shape, rawdata_mask.shape)
-#    print(totallumi, np.average(totallumi) )
-#    stable = np.where(totallumi>np.average(totallumi)*0.8)
-#    print(stable)
-#    totallumi=totallumi[stable]
-#    g=ROOT.TGraph()
-#    for i in range(min(len(totallumi),5000)):
-#        g.SetPoint(i, i, totallumi[i])
-#    g.SetMarkerSize(2)
-#    g.SetMarkerColor(ROOT.kBlue)
-#    g.Draw("AP")
-#    input()
-#
-#exit()
-#for LBKey in LBKeys2npindex.keys():
-#    rawdata = np.average( data_bx[LBKeys2npindex[LBKey][0]:LBKeys2npindex[LBKey][1]+1], axis=0)
-#    rawdata_mask = data_mask[LBKeys2npindex[LBKey][0]]
-#    rawdata_mask = rawdata_mask.astype('int32')
-#    rawdata=np.nan_to_num(rawdata, nan=0, posinf=0)  # remove nan
-#    nactive=np.sum(rawdata_mask)
-#    print('average,total: ', np.sum(np.multiply(rawdata,rawdata_mask))/nactive, np.sum(np.multiply(rawdata,rawdata_mask))*(LBKeys2npindex[LBKey][1]+1-LBKeys2npindex[LBKey][0]))
-#    for i in range(LBKeys2npindex[LBKey][1]+1-LBKeys2npindex[LBKey][0]):
-#        rawdata = data_bx[LBKeys2npindex[LBKey][0]+i]
-#        rawdata_mask = data_mask[LBKeys2npindex[LBKey][0]]
-#        rawdata_mask = rawdata_mask.astype('int32')
-#        rawdata=np.nan_to_num(rawdata, nan=0, posinf=0)  # remove nan
-#        nactive=np.sum(rawdata_mask)
-#        print(i, ' : ', np.sum(np.multiply(rawdata,rawdata_mask))/nactive, np.sum(np.multiply(rawdata,rawdata_mask))*(LBKeys2npindex[LBKey][1]+1-LBKeys2npindex[LBKey][0]))
-#    input()
-#
-#exit()
 
 for LBKey in LBKeys2npindex.keys():
-    if verbose>10: print(LBKey)
+    if verbose>10: print('----------------------------- ',LBKey)
+    if verbose>10: print('from ', LBKeys2npindex[LBKey][0], ' to ', LBKeys2npindex[LBKey][1])
     rawdata = data_bx[LBKeys2npindex[LBKey][0]:LBKeys2npindex[LBKey][1]+1]
     rawdata_mask = data_mask[LBKeys2npindex[LBKey][0]:LBKeys2npindex[LBKey][1]+1]
     rawdata=np.nan_to_num(rawdata, nan=0, posinf=0)  # remove nan
@@ -317,6 +278,7 @@ for LBKey in LBKeys2npindex.keys():
     if len(rawdata)<=0:
         print('no events left after delete')
         continue
+    if verbose>10: print('unstable_nbs ', len(unstable_nbs[0]))
     rawdata=np.nan_to_num(rawdata, nan=0, posinf=0)  # remove nan
     rawdata=np.average(rawdata, axis=0)
     rawdata_mask = data_mask[LBKeys2npindex[LBKey][0]]
@@ -325,7 +287,6 @@ for LBKey in LBKeys2npindex.keys():
     if nactive<=0:
         print("nactive is ", nactive)
         continue
-    if verbose>10: print("LBKey ", LBKey)
     if args.undoAG:
         # undo afterglow
         if args.plot:
@@ -370,13 +331,15 @@ for LBKey in LBKeys2npindex.keys():
         for ibx in activeBXMask_list:
             rawdata -= rawdata[ibx]*np.roll(newHFSBR, ibx)
     train_ends=np.roll(rawdata_mask,1)-rawdata_mask
-    lumi_plus1=rawdata[np.where(train_ends==1)]
-    lumi=np.roll(rawdata,1)[np.where(train_ends==1)]
-    type1_res_frac=np.divide(lumi_plus1,lumi)
+    lumi_AfterTrainEnd=rawdata[np.where(train_ends==1)]  # n+1
+    lumi_TrainEnd=np.roll(rawdata,1)[np.where(train_ends==1)]  # n
+    lumi_BeforeTrainEnd=np.roll(rawdata,-1)[np.where(train_ends==1)] #n-1
+    #type1_res_frac=np.divide(lumi_AfterTrainEnd,lumi_TrainEnd) # No correction to n
+    type1_res_frac= np.divide(lumi_AfterTrainEnd, ( lumi_TrainEnd - np.divide(lumi_AfterTrainEnd,lumi_TrainEnd)*lumi_BeforeTrainEnd ) )
     meanType1_frac = np.mean(type1_res_frac)
-    meanType1_abs = np.mean(lumi_plus1)
+    meanType1_abs = np.mean(( lumi_TrainEnd - np.divide(lumi_AfterTrainEnd,lumi_TrainEnd)*lumi_BeforeTrainEnd ))
     meanType1_frac_e = np.std(type1_res_frac)
-    meanType1_abs_e = np.std(lumi_plus1)
+    meanType1_abs_e = np.std(( lumi_TrainEnd - np.divide(lumi_AfterTrainEnd,lumi_TrainEnd)*lumi_BeforeTrainEnd ))
     meanType2_frac=[]
     meanType2_abs=[]
     for iend in np.where(train_ends==1)[0]:
@@ -391,13 +354,14 @@ for LBKey in LBKeys2npindex.keys():
     if verbose>10: print("The average noise is ", noise)
     rawdata_cor=np.copy(rawdata)-noise
     # Do type1 correction
-    lumi_plus1_cor=rawdata_cor[np.where(train_ends==1)]
-    lumi_cor=np.roll(rawdata_cor,1)[np.where(train_ends==1)]
-    type1_res_frac_cor =np.divide(lumi_plus1_cor,lumi_cor)
+    lumi_AfterTrainEnd_cor=rawdata_cor[np.where(train_ends==1)]  # n+1
+    lumi_TrainEnd_cor=np.roll(rawdata_cor,1)[np.where(train_ends==1)]  # n
+    lumi_BeforeTrainEnd_cor=np.roll(rawdata_cor,-1)[np.where(train_ends==1)] #n-1
+    type1_res_frac_cor = np.divide(lumi_AfterTrainEnd_cor, ( lumi_TrainEnd_cor - np.divide(lumi_AfterTrainEnd_cor,lumi_TrainEnd_cor)*lumi_BeforeTrainEnd_cor ) )
     meanType1_frac_cor = np.mean(type1_res_frac_cor)
-    meanType1_abs_cor  = np.mean(lumi_plus1_cor)
+    meanType1_abs_cor  = np.mean(( lumi_TrainEnd_cor - np.divide(lumi_AfterTrainEnd_cor,lumi_TrainEnd_cor)*lumi_BeforeTrainEnd_cor ))
     meanType1_frac_cor_e = np.std(type1_res_frac_cor)
-    meanType1_abs_cor_e  = np.std(lumi_plus1_cor)
+    meanType1_abs_cor_e  = np.std(( lumi_TrainEnd_cor - np.divide(lumi_AfterTrainEnd_cor,lumi_TrainEnd_cor)*lumi_BeforeTrainEnd_cor ))
     meanType2_frac_cor=[]
     meanType2_abs_cor=[]
     for iend in np.where(train_ends==1)[0]:
@@ -420,13 +384,14 @@ for LBKey in LBKeys2npindex.keys():
 
     rawdata_cor=rawdata_cor-np.roll(np.multiply(rawdata_cor,rawdata_mask)*meanType1_frac_cor,1)
     # repeat type1 residual calculation
-    lumi_plus1_cor=rawdata_cor[np.where(train_ends==1)]
-    lumi_cor=np.roll(rawdata_cor,1)[np.where(train_ends==1)]
-    type1_res_frac_cor=np.divide(lumi_plus1_cor,lumi_cor)
+    lumi_AfterTrainEnd_cor=rawdata_cor[np.where(train_ends==1)]  # n+1
+    lumi_TrainEnd_cor=np.roll(rawdata_cor,1)[np.where(train_ends==1)]  # n
+    lumi_BeforeTrainEnd_cor=np.roll(rawdata_cor,-1)[np.where(train_ends==1)] #n-1
+    type1_res_frac_cor = np.divide(lumi_AfterTrainEnd_cor, ( lumi_TrainEnd_cor - np.divide(lumi_AfterTrainEnd_cor,lumi_TrainEnd_cor)*lumi_BeforeTrainEnd_cor ) )
     meanType1_frac_cor = np.mean(type1_res_frac_cor)
-    meanType1_abs_cor = np.mean(lumi_plus1_cor)
+    meanType1_abs_cor  = np.mean(( lumi_TrainEnd_cor - np.divide(lumi_AfterTrainEnd_cor,lumi_TrainEnd_cor)*lumi_BeforeTrainEnd_cor ))
     meanType1_frac_cor_e = np.std(type1_res_frac_cor)
-    meanType1_abs_cor_e = np.std(lumi_plus1_cor)
+    meanType1_abs_cor_e  = np.std(( lumi_TrainEnd_cor - np.divide(lumi_AfterTrainEnd_cor,lumi_TrainEnd_cor)*lumi_BeforeTrainEnd_cor ))
     meanType2_frac_cor=[]
     meanType2_abs_cor=[]
     for iend in np.where(train_ends==1)[0]:
@@ -435,7 +400,6 @@ for LBKey in LBKeys2npindex.keys():
                 break
             meanType2_abs_cor.append(rawdata_cor[iend+t2bx+1])
             meanType2_frac_cor.append(rawdata_cor[iend+t2bx+1]/rawdata_cor[iend-1])
-
     if verbose>10: print('raw Lumi/average, meanType1_frac, meanType1_abs,meanType2_frac,meanType2_abs ', np.sum(np.multiply(rawdata,rawdata_mask))/nactive, meanType1_frac, meanType1_abs,np.mean(meanType2_frac),np.std(meanType2_abs))
     if verbose>10: print('cor Lumi/average, meanType1_frac, meanType1_abs,meanType2_frac,meanType2_abs ', np.sum(np.multiply(rawdata_cor,rawdata_mask))/nactive, meanType1_frac_cor, meanType1_abs_cor,np.mean(meanType2_frac_cor),np.std(meanType2_abs_cor))
     # ---------------------------  Bunch train effect 
@@ -450,6 +414,8 @@ for LBKey in LBKeys2npindex.keys():
                 sum_train += np.mean(rawdata_cor[istart+1:istart+5])
                 n_train+=1
     if n_train>0: AveSBIL_leadBX = float(sum_lead)/n_train
+    if verbose>10: print("Bunch train effect: n_train, sum_lead, sum_train, AveSBIL_leadBX ", n_train, sum_lead, sum_train, AveSBIL_leadBX )
+
     #print(n_train, sum_lead, sum_train, AveSBIL_leadBX)
     # ---------------------------  Undo afterglow, redo another afterglow
 
@@ -461,8 +427,8 @@ for LBKey in LBKeys2npindex.keys():
         print(np.max(rawdata))
         htemp=ROOT.TH1F("htemp", "", BXLength, 0, BXLength)
         htemp.SetContent(array.array('d',[0])+array.array('d',rawdata_mask))
-        #makeplot(allLumiPerBX_oldSBR[LBKey], allLumiPerBX_oldSBR_cor[LBKey], htemp)
-        makeplots(htempraw, allLumiPerBX_oldSBR[LBKey], allLumiPerBX_oldSBR_cor[LBKey])
+        makeplot(allLumiPerBX_oldSBR[LBKey], allLumiPerBX_oldSBR_cor[LBKey], htemp)
+        #makeplots(htempraw, allLumiPerBX_oldSBR[LBKey], allLumiPerBX_oldSBR_cor[LBKey])
     hist_info[LBKey].SetBinContent(8,np.sum(np.multiply(rawdata,rawdata_mask))/nactive) #Average SBIL
     hist_info[LBKey].SetBinContent(9,np.sum(np.multiply(rawdata,rawdata_mask))*(LBKeys2npindex[LBKey][1]+1-LBKeys2npindex[LBKey][0]-len(unstable_nbs[0])))  # Total L
     hist_info[LBKey].SetBinContent(10,meanType1_frac) # type1 fraction
